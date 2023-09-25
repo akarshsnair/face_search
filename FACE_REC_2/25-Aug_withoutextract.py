@@ -1,3 +1,7 @@
+import time
+
+start_time = time.time()
+
 import os
 import cv2
 import numpy as np
@@ -16,7 +20,7 @@ def recognize_face(image, face_detector):
     return faces
 
 def align_face(image, face):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)      
     shape_predictor = dlib.shape_predictor("model/shape_data")
     landmarks = shape_predictor(gray, face)
 
@@ -31,6 +35,7 @@ def load_embeddings(embeddings_dir):
             embedding = np.load(os.path.join(embeddings_dir, filename))
             embeddings[user_id] = embedding
     return embeddings
+
 def match_faces(embeddings, query_embedding):
     similarities = {}
     for user_id, reference_embedding in embeddings.items():
@@ -42,16 +47,9 @@ def match_faces(embeddings, query_embedding):
 def main():
     dataset_dir = 'dataset'
     embeddings_dir = 'data/embeddings'
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-    query_image_path = 'eval/mamm.jpg'
-=======
-    query_image_path = 'eval/Sandeep Chhetri_Image_40.jpg'
->>>>>>> Stashed changes
 
-=======
-    query_image_path = 'eval/valen1.jpeg'
->>>>>>> Stashed changes
+    query_image_path = 'eval/deepika-padukone-cannes-2022-main_7_202209.jpg'
+
     face_detector = dlib.get_frontal_face_detector()
     face_recognizer = dlib.face_recognition_model_v1('model/data')
 
@@ -87,7 +85,7 @@ def main():
     query_faces = recognize_face(query_image, face_detector)
 
     if not query_faces:
-        #print("No faces found in the query image.")
+        print("No faces found in the query image.")
         return
 
     aligned_face = align_face(query_image, query_faces[0])
@@ -111,9 +109,14 @@ def main():
             print(f"Similar Image Filename: {user_id}.jpg")
 
             cv2.imshow("Similar Image", similar_image)
+            #cv2.resize(similar_image, (100, 100))
+            end_time = time.time() 
+            print(f"Algorithm linear dlib took {end_time - start_time:.4f} seconds to execute")
             cv2.waitKey(0)
             cv2.destroyAllWindows()
             break
 
 if __name__ == '__main__':
     main()
+
+

@@ -1,90 +1,97 @@
 import os
 import cv2
 import numpy as np
-import mediapipe as mp
+from mtcnn import MTCNN
 from sklearn.metrics.pairwise import cosine_similarity
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing import image
+from facenet import preprocessing
 
 COSINE_THRESHOLD = 0.5
 
-def extract_embeddings(face_mesh, image, face):
-    # Extract face landmarks using MediaPipe Face Mesh
-    results = face_mesh.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    if results.multi_face_landmarks:
-        landmarks = results.multi_face_landmarks[0].landmark
-        landmarks = [(int(landmark.x * image.shape[1]), int(landmark.y * image.shape[0])) for landmark in landmarks]
+def extract_embeddings(face_net, aligned_face):
+    # Preprocess the image for FaceNet
+    aligned_face = preprocessing.prewhiten(aligned_face)
+    aligned_face = cv2.resize(aligned_face, (160, 160))
+    
+    # Expand dimensions to match FaceNet model input shape
+    aligned_face = np.expand_dims(aligned_face, axis=0)
+    
+    # Generate embeddings
+    embedding = face_net.predict(aligned_face)
+    
+    return embedding
 
-        # Draw landmarks on the face (optional)
-        for landmark in landmarks:
-            cv2.circle(image, landmark, 2, (0, 255, 0), -1)
-
-        # Extract embeddings (you may need to customize this part)
-        embedding = np.array([landmark.x for landmark in landmarks] + [landmark.y for landmark in landmarks])
-
-        return embedding
-    else:
-        return None
-
-def recognize_face(image, face_detector):
-    # Use MediaPipe Face Detection for face detection
-    results = face_detector.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    faces = []
-    if results.detections:
-        for detection in results.detections:
-            bboxC = detection.location_data.relative_bounding_box
-            ih, iw, _ = image.shape
-            x, y, w, h = int(bboxC.xmin * iw), int(bboxC.ymin * ih), int(bboxC.width * iw), int(bboxC.height * ih)
-            faces.append(dlib.rectangle(left=x, top=y, right=x+w, bottom=y+h))
+def recognize_face(image, mtcnn_detector):
+    faces = mtcnn_detector.detect_faces(image)
     return faces
+
+def load_embeddings(embeddings_dir):
+    embeddings = {}
+    for filename in os.listdir(embeddings_dir):
+        if filename.endswith('.npy'):
+            user_id = os.path.splitext(filename)[0]
+            embedding = np.load(os.path.join(embeddings_dir, filename))
+            embeddings[user_id] = embedding
+    return embeddings
+
+def match_faces(embeddings, query_embedding):
+    similarities = {}
+    for user_id, reference_embedding in embeddings.items():
+        similarity = cosine_similarity(
+            [query_embedding], [reference_embedding])[0][0]
+        similarities[user_id] = similarity
+    return similarities
 
 def main():
     dataset_dir = 'dataset'
     embeddings_dir = 'data/embeddings'
-    query_image_path = 'eval/1137877401.jpg'
+    query_image_path = 'eval/sidhiq3.jpeg'
 
-    mp_face_detection = mp.solutions.face_detection
-    mp_face_mesh = mp.solutions.face_mesh
-
-    # Initialize MediaPipe Face Detection and Face Mesh
-    face_detection = mp_face_detection.FaceDetection(min_detection_confidence=0.2)
-    face_mesh = mp_face_mesh.FaceMesh()
-
-    embeddings = load_embeddings(embeddings_dir)
-
+    mtcnn_detector = MTCNN()
+    face_net = load_model('path_to_facenet_model')  # Replace with the path to your FaceNet model
+    
     if not os.path.exists(embeddings_dir):
         os.makedirs(embeddings_dir)
 
+    # Process the dataset images and extract embeddings
     for filename in os.listdir(dataset_dir):
         if filename.lower().endswith(('.jpg', '.png', '.jpeg')):
-            user_id = os.path.splitext(filename)[0]
-            if user_id in embeddings:
-                continue
-
             image_path = os.path.join(dataset_dir, filename)
             image = cv2.imread(image_path)
-
-            faces = recognize_face(image, face_detection)
+            faces = recognize_face(image, mtcnn_detector)
 
             if not faces:
+                print(f"No faces found in {filename}. Skipping.")
                 continue
 
-            aligned_face = align_face(image, faces[0])
-            embedding = extract_embeddings(face_mesh, aligned_face, faces[0])
+            x, y, w, h = faces[0]['box']
+            face = image[y:y+h, x:x+w]
+            aligned_face = cv2.resize(face, (160, 160))  # Resize for FaceNet
 
-            if embedding is not None:
-                embedding_path = os.path.join(embeddings_dir, f"{user_id}.npy")
-                np.save(embedding_path, embedding)
+            embedding = extract_embeddings(face_net, aligned_face)
 
-                print(f"Embedding saved for {filename}")
+            user_id = os.path.splitext(filename)[0]
+            embedding_path = os.path.join(embeddings_dir, f"{user_id}.npy")
+            np.save(embedding_path, embedding)
 
+            print(f"Embedding saved for {filename}")
+
+    # Load and preprocess the query image
     query_image = cv2.imread(query_image_path)
-    query_faces = recognize_face(query_image, face_detection)
+    faces = recognize_face(query_image, mtcnn_detector)
 
-    if not query_faces:
+    if not faces:
+        print("No faces found in the query image.")
         return
 
-    aligned_face = align_face(query_image, query_faces[0])
-    query_embedding = extract_embeddings(face_mesh, aligned_face, query_faces[0])
+    x, y, w, h = faces[0]['box']
+    query_face = query_image[y:y+h, x:x+w]
+    aligned_face = cv2.resize(query_face, (160, 160))  # Resize for FaceNet
+    query_embedding = extract_embeddings(face_net, aligned_face)
 
+    # Match query embedding with dataset embeddings
+    embeddings = load_embeddings(embeddings_dir)
     similarities = match_faces(embeddings, query_embedding)
 
     sorted_similarities = sorted(
@@ -99,9 +106,7 @@ def main():
 
             similar_image_path = os.path.join(dataset_dir, user_id + '.jpg')
             similar_image = cv2.imread(similar_image_path)
-
             print(f"Similar Image Filename: {user_id}.jpg")
-
             cv2.imshow("Similar Image", similar_image)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
