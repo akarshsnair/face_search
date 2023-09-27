@@ -7,8 +7,6 @@ def compute_sift_features(image_path):
     sift = cv2.SIFT_create()
     keypoints, descriptors = sift.detectAndCompute(image, None)
     return keypoints, descriptors
-
-
 query_image_path = "data/val/elton_john/httpcdncdnjustjaredcomwpcontentuploadsheadlineseltonjohnsupportsbrucejennerstransitiontowomanjpg.jpg"
 query_keypoints, query_descriptors = compute_sift_features(query_image_path)
 
@@ -40,7 +38,6 @@ for filename in os.listdir(dataset_directory):
                 best_match = image_path
 
 print("Best Match Found:", best_match)
-
 if best_match:
     query_image = cv2.imread(query_image_path)
     matching_image = cv2.imread(best_match)
