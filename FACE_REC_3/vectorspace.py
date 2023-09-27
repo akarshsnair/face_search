@@ -4,9 +4,7 @@ import numpy as np
 import dlib
 from sklearn.neighbors import NearestNeighbors
 import time
-
 COSINE_THRESHOLD = 0.5
-
 def extract_embeddings(face_recognizer, aligned_face):
     embedding = face_recognizer.compute_face_descriptor(aligned_face)
     return np.array(embedding)

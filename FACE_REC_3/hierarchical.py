@@ -33,9 +33,7 @@ def load_embeddings(embeddings_dir):
     return embeddings
 
 def hierarchical_clustering(embeddings):
-    
     reference_embeddings = np.array(list(embeddings.values()))
-    
     # Perform hierarchical clustering
     clustering = AgglomerativeClustering(n_clusters=None, linkage='ward', distance_threshold=0.5)
     cluster_labels = clustering.fit_predict(reference_embeddings)
