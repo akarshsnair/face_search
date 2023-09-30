@@ -1,8 +1,6 @@
 import cv2
 import numpy as np
 import os
-
-
 input_image = cv2.imread('eval/2023-08-21-104257.jpg', cv2.IMREAD_GRAYSCALE)
 
 dataset_folder = 'dataset'
